@@ -13,24 +13,27 @@ const rl = readline.createInterface({
 const ask = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 async function configureCodex() {
-    console.log("=== Codex 自定义节点配置工具 ===");
+    console.log("=== Codex 自定义节点极速配置工具 ===");
+    console.log("---------------------------------------");
 
     // 1. 交互式获取基础配置
     const defaultUrl = "https://api.openai.com/v1";
-    const inputUrl = await ask(`请输入 API 代理地址 (留空则默认使用 ${defaultUrl}):\n> `);
+    const inputUrl = await ask(`[1/3] 请输入 API 代理地址 (留空则默认 ${defaultUrl}):\n> `);
     const baseUrl = inputUrl.trim() || defaultUrl;
 
-    const apiKey = await ask("请输入您的 API 密钥:\n> ");
+    const apiKey = await ask("[2/3] 请输入您的 API 密钥:\n> ");
     if (!apiKey.trim()) {
-        console.error("配置中断：API 密钥不能为空。");
+        console.error("\n[!] 配置中断：API 密钥不能为空。");
         process.exit(1);
     }
 
     // 2. 交互式获取通知偏好
-    const notifyChoice = await ask("是否开启任务完成的系统弹窗通知？(y/n，默认 n):\n> ");
+    const notifyChoice = await ask("[3/3] 是否开启任务完成的系统弹窗通知？(y/n，默认 n):\n> ");
     const enableNotify = notifyChoice.trim().toLowerCase() === 'y';
 
     rl.close();
+    console.log("\n---------------------------------------");
+    console.log("正在写入配置...");
 
     const codexDir = path.join(os.homedir(), ".codex");
     await fs.ensureDir(codexDir);
@@ -57,21 +60,22 @@ async function configureCodex() {
         requires_openai_auth: true
     };
 
-    // 3. 处理系统通知逻辑 (完善版)
+    // 3. 处理现代系统通知逻辑
     if (enableNotify) {
         const platform = process.platform;
         
         if (platform === "darwin") {
-            // macOS: 生成可执行的 shell 脚本来调用 AppleScript
+            // macOS: AppleScript 方案
             const scriptPath = path.join(codexDir, "notify_on_finish.sh");
-            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "Codex 任务已完成" with title "Codex"' > /dev/null 2>&1\n`;
+            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "Codex 做了什么" with title "Codex 当前任务已完成"' > /dev/null 2>&1\n`;
             
-            // 显式赋予 755 权限
+            // 显式赋予可执行权限
             await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8", mode: 0o755 });
             config.notify = ["/bin/sh", scriptPath];
-            console.log(`[+] macOS 通知脚本已生成: ${scriptPath}`);
+            console.log(`[+] macOS 通知脚本已就绪: ${scriptPath}`);
+            
         } else if (platform === "win32") {
-            // Windows: 生成 Powershell 脚本来发送现代 Toast 通知
+            // Windows: PowerShell Toast 方案 (大字标题 + 小字正文)
             const scriptPath = path.join(codexDir, "notify_on_finish.ps1");
             const scriptContent = `
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
@@ -87,31 +91,32 @@ $Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
             
             await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8" });
             
-            // 配置 Codex 使用 Powershell 运行该脚本，并绕过执行策略
+            // 绕过 PS 执行策略运行
             config.notify = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
-            console.log(`[+] Windows 通知脚本已生成: ${scriptPath}`);
+            console.log(`[+] Windows 通知脚本已就绪: ${scriptPath}`);
         } else {
-            console.log("\n[!] 当前系统暂不支持自动配置弹窗通知，已跳过该项设置。");
+            console.log("[!] 当前系统暂不支持自动配置弹窗通知，已跳过该项。");
         }
     } else {
+        // 用户选择关闭时，确保清理掉残留的 notify 字段
         delete config.notify;
     }
 
-    // 写入配置
+    // 4. 写入最终文件
     await fs.writeFile(configPath, toml.stringify(config), "utf8");
-    console.log(`\n[+] 路由与通知配置已更新: ${configPath}`);
+    console.log(`[+] 路由配置已更新: config.toml`);
 
     const authPath = path.join(codexDir, "auth.json");
     let auth = await fs.readJSON(authPath).catch(() => ({}));
     auth.OPENAI_API_KEY = apiKey.trim();
     
     await fs.writeJSON(authPath, auth, { spaces: 2 });
-    console.log(`[+] 密钥信息已写入: ${authPath}`);
+    console.log(`[+] 密钥信息已更新: auth.json`);
 
-    console.log("\n配置完成，现在可以正常启动 Codex。");
+    console.log("\n🎉 配置全部完成！请尽情享受高智商的 Codex 吧。");
 }
 
 configureCodex().catch(err => {
-    console.error("写入配置时发生错误:", err.message);
+    console.error("\n[X] 写入配置时发生严重错误:", err.message);
     process.exit(1);
 });
