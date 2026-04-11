@@ -42,7 +42,7 @@ async function configureCodex() {
         config = toml.parse(rawContent);
     }
 
-    // --- 核心更新：适配 GPT-5.4 并拉满推理强度 ---
+    // --- 核心配置：适配 GPT-5.4 并拉满推理强度 ---
     config.model_provider = "custom";
     config.model = "gpt-5.4";
     config.model_reasoning_effort = "xhigh";
@@ -57,19 +57,39 @@ async function configureCodex() {
         requires_openai_auth: true
     };
 
-    // 3. 处理系统通知逻辑
+    // 3. 处理系统通知逻辑 (完善版)
     if (enableNotify) {
         const platform = process.platform;
-        const notifyMsg = "Codex 任务已完成";
         
         if (platform === "darwin") {
+            // macOS: 生成可执行的 shell 脚本来调用 AppleScript
             const scriptPath = path.join(codexDir, "notify_on_finish.sh");
-            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "${notifyMsg}" with title "Codex"' > /dev/null 2>&1\n`;
+            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "Codex 任务已完成" with title "Codex"' > /dev/null 2>&1\n`;
             
+            // 显式赋予 755 权限
             await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8", mode: 0o755 });
             config.notify = ["/bin/sh", scriptPath];
+            console.log(`[+] macOS 通知脚本已生成: ${scriptPath}`);
         } else if (platform === "win32") {
-            config.notify = ["cmd", "/c", "msg", "*", notifyMsg];
+            // Windows: 生成 Powershell 脚本来发送现代 Toast 通知
+            const scriptPath = path.join(codexDir, "notify_on_finish.ps1");
+            const scriptContent = `
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+$Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$RawXml = [xml]$Template.GetXml()
+$RawXml.toast.visual.binding.text[0].AppendChild($RawXml.CreateTextNode('codex当前任务已完成'))
+$RawXml.toast.visual.binding.text[1].AppendChild($RawXml.CreateTextNode('codex做了什么'))
+$SerializedXml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$SerializedXml.LoadXml($RawXml.OuterXml)
+$Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Codex').Show($Toast)
+            `;
+            
+            await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8" });
+            
+            // 配置 Codex 使用 Powershell 运行该脚本，并绕过执行策略
+            config.notify = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
+            console.log(`[+] Windows 通知脚本已生成: ${scriptPath}`);
         } else {
             console.log("\n[!] 当前系统暂不支持自动配置弹窗通知，已跳过该项设置。");
         }
