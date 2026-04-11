@@ -45,7 +45,7 @@ async function configureCodex() {
         config = toml.parse(rawContent);
     }
 
-    // --- 核心配置：适配 GPT-5.4 并拉满推理强度 ---
+    // 核心配置：适配 GPT-5.4 并拉满推理强度
     config.model_provider = "custom";
     config.model = "gpt-5.4";
     config.model_reasoning_effort = "xhigh";
@@ -60,29 +60,30 @@ async function configureCodex() {
         requires_openai_auth: true
     };
 
-    // 3. 处理现代系统通知逻辑
+    // 3. 处理现代系统通知逻辑 (还原官方简明文案)
     if (enableNotify) {
         const platform = process.platform;
+        const notifyTitle = "Codex";
+        const notifyMsg = "Codex 任务完成!";
         
         if (platform === "darwin") {
-            // macOS: AppleScript 方案
+            // macOS: 还原官方文案的 AppleScript
             const scriptPath = path.join(codexDir, "notify_on_finish.sh");
-            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "Codex 做了什么" with title "Codex 当前任务已完成"' > /dev/null 2>&1\n`;
+            const scriptContent = `#!/bin/bash\nosascript -e 'display notification "${notifyMsg}" with title "${notifyTitle}"' > /dev/null 2>&1\n`;
             
-            // 显式赋予可执行权限
             await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8", mode: 0o755 });
             config.notify = ["/bin/sh", scriptPath];
             console.log(`[+] macOS 通知脚本已就绪: ${scriptPath}`);
             
         } else if (platform === "win32") {
-            // Windows: PowerShell Toast 方案 (大字标题 + 小字正文)
+            // Windows: 保持 Toast 框架，使用官方文案
             const scriptPath = path.join(codexDir, "notify_on_finish.ps1");
             const scriptContent = `
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
 $Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
 $RawXml = [xml]$Template.GetXml()
-$RawXml.toast.visual.binding.text[0].AppendChild($RawXml.CreateTextNode('codex当前任务已完成'))
-$RawXml.toast.visual.binding.text[1].AppendChild($RawXml.CreateTextNode('codex做了什么'))
+$RawXml.toast.visual.binding.text[0].AppendChild($RawXml.CreateTextNode('${notifyTitle}'))
+$RawXml.toast.visual.binding.text[1].AppendChild($RawXml.CreateTextNode('${notifyMsg}'))
 $SerializedXml = New-Object Windows.Data.Xml.Dom.XmlDocument
 $SerializedXml.LoadXml($RawXml.OuterXml)
 $Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
@@ -91,14 +92,12 @@ $Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
             
             await fs.writeFile(scriptPath, scriptContent, { encoding: "utf8" });
             
-            // 绕过 PS 执行策略运行
             config.notify = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath];
             console.log(`[+] Windows 通知脚本已就绪: ${scriptPath}`);
         } else {
             console.log("[!] 当前系统暂不支持自动配置弹窗通知，已跳过该项。");
         }
     } else {
-        // 用户选择关闭时，确保清理掉残留的 notify 字段
         delete config.notify;
     }
 
@@ -113,7 +112,7 @@ $Toast = [Windows.UI.Notifications.ToastNotification]::new($SerializedXml)
     await fs.writeJSON(authPath, auth, { spaces: 2 });
     console.log(`[+] 密钥信息已更新: auth.json`);
 
-    console.log("\n🎉 配置全部完成！请尽情享受高智商的 Codex 吧。");
+    console.log("\n配置全部完成！请尽情享受高智商的 Codex 吧。");
 }
 
 configureCodex().catch(err => {
