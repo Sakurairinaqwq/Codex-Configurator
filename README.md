@@ -49,4 +49,5 @@ node PurelyLocalVersionIndex.js
 
 * **配置隔离**：本工具的所有修改均严格限制在用户目录 `~/.codex/` 内（涉及 `config.toml` 与 `auth.json`），绝不污染系统级的全局环境变量。
 * **通知脚本**：如果开启了通知，脚本会在 `~/.codex/` 下生成 `notify_on_finish.ps1` (Windows) 或 `notify_on_finish.sh` (macOS)，并在 `config.toml` 中配置 Codex 在任务完成时调用它们。
+* **如果是中转站**：可以直接发送给用户链接使用！记得署名，非常感谢！
 ```
